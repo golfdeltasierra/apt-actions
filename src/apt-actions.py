@@ -27,9 +27,9 @@ class Action:
     transaction_type: str
     command: str
 
-    def matches(self, transaction_data, phase):
+    def matching_packages(self, transaction_data, phase):
         if not fnmatch(self.phase, phase):
-            return None
+            return
         
         for pkg in transaction_data:
             if not fnmatch(pkg["operation"], self.transaction_type.upper()):
@@ -168,7 +168,7 @@ class AptActions:
         self.read_actions()
 
         for action in self.actions:
-            for pkg in action.matches(self.transaction_data, current_phase):
+            for pkg in action.matching_packages(self.transaction_data, current_phase):
                 action.run(pkg)
 
         if current_phase == "post":
