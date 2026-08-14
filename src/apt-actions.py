@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from fnmatch import fnmatch
-import json, os, argparse, sys, subprocess
+import json
+import os
+import argparse
+import sys
+import subprocess
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 
