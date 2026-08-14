@@ -10,14 +10,15 @@ import subprocess
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 
-parser = argparse.ArgumentParser()
-group = parser.add_mutually_exclusive_group()
+def parse_args():
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
 
-group.add_argument("--parse", help="Parse package data from stdin", action="store_true")
-group.add_argument("--pre", help="Process pre-transaction actions", action="store_true")
-group.add_argument("--post", help="Process post-transaction actions", action="store_true")
+    group.add_argument("--parse", help="Parse package data from stdin", action="store_true")
+    group.add_argument("--pre", help="Process pre-transaction actions", action="store_true")
+    group.add_argument("--post", help="Process post-transaction actions", action="store_true")
 
-args = parser.parse_args()
+    return parser.parse_args()
 
 @dataclass(slots=True)
 class Action:
@@ -173,7 +174,7 @@ class AptActions:
         if current_phase == "post":
             self.tmp_file.unlink(missing_ok=True)
 
-    def main(self):
+    def main(self, args):
         if args.parse:
             self.parse()
         
@@ -185,4 +186,4 @@ class AptActions:
 
 
 if __name__ == "__main__":
-    AptActions().main()
+    AptActions().main(parse_args())
