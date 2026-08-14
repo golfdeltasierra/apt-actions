@@ -139,7 +139,7 @@ class AptActions:
         valid_actions = []
 
         for item in self.actions_dir.iterdir():
-            if item.is_file() and str(item).endswith(".action"):
+            if item.is_file() and item.suffix == ".action":
                 valid_actions.append(item)
         
         for action_file in valid_actions:
