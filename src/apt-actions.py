@@ -17,8 +17,6 @@ group.add_argument("--parse", help="Parse package data from stdin", action="stor
 group.add_argument("--pre", help="Process pre-transaction actions", action="store_true")
 group.add_argument("--post", help="Process post-transaction actions", action="store_true")
 
-parser.add_argument("--verbose", help="Enable verobse", action="store_true")
-
 args = parser.parse_args()
 
 @dataclass(slots=True)
