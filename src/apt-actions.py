@@ -20,7 +20,7 @@ def parse_args():
 
     return parser.parse_args()
 
-@dataclass(slots=True)
+@dataclass()
 class Action:
     target: str
     phase: str
@@ -49,7 +49,7 @@ class Action:
 
         subprocess.run(self.command, shell=True, env=env)
 
-@dataclass(slots=True)
+@dataclass()
 class PackageTransaction:
     name: str
     old_version: str
@@ -62,7 +62,7 @@ class PackageTransaction:
     raw_action: str
     operation: str = ""
 
-@dataclass(slots=True)
+@dataclass()
 class Transaction:
     protocol: int = 3
     packages: list[PackageTransaction] = field(default_factory=list)
