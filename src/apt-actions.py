@@ -9,6 +9,7 @@ import sys
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
+from typing import List
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -65,7 +66,7 @@ class PackageTransaction:
 @dataclass()
 class Transaction:
     protocol: int = 3
-    packages: list[PackageTransaction] = field(default_factory=list)
+    packages: List[PackageTransaction] = field(default_factory=list)
 
 class AptActions:
     DEFAULT_CONFIG_DIR = Path("/etc/apt-actions")
