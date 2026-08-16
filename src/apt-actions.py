@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+from multiprocessing.sharedctypes import Value
 from fnmatch import fnmatch
 import json
 import os
@@ -48,7 +49,13 @@ class Action:
         env["APT_ACTIONS_NEW_ARCH"] = pkg["new_arch"]
 
 
-        subprocess.run(self.command, shell=True, env=env)
+        result = subprocess.run(self.command, shell=True, env=env)
+        if result.returncode != 0:
+            print(
+                f"apt-actions: command for '{pkg['name']}' exited with code "
+                f"{result.returncode}: {self.command}",
+                file=sys.stderr
+            )
 
 @dataclass()
 class PackageTransaction:
@@ -75,18 +82,15 @@ class AptActions:
     SEPARATOR = ";"
 
     def __init__(self, config_dir=None, runtime_dir=None, actions_dir = None):
-        self.config_dir = config_dir or os.getenv("APT_ACTIONS_CONFIG_DIR") or self.DEFAULT_CONFIG_DIR
-        self.runtime_dir = runtime_dir or os.getenv("APT_ACTIONS_RUNTIME_DIR") or self.DEFAULT_RUNTIME_DIR
-        self.actions_dir = actions_dir or os.getenv("APT_ACTIONS_DIR") or self.DEFAULT_ACTIONS_DIR
+        self.config_dir = Path(config_dir or os.getenv("APT_ACTIONS_CONFIG_DIR") or self.DEFAULT_CONFIG_DIR)
+        self.runtime_dir = Path(runtime_dir or os.getenv("APT_ACTIONS_RUNTIME_DIR") or self.DEFAULT_RUNTIME_DIR)
+        self.actions_dir = Path(actions_dir or os.getenv("APT_ACTIONS_DIR") or self.DEFAULT_ACTIONS_DIR)
         self.tmp_file = self.runtime_dir / "tmp.json"
 
         self.transaction_data = []
         self.actions = []
 
-        self.config_dir = Path(self.config_dir)
-        self.runtime_dir = Path(self.runtime_dir)
-        self.actions_dir = Path(self.actions_dir)
-        self.tmp_file = Path(self.tmp_file)
+        self.transaction_field_count = 9
 
     def _operation(self, pkg: PackageTransaction):
         if pkg.raw_action == "REMOVE":
@@ -118,7 +122,16 @@ class AptActions:
             line = line.rstrip()
             if line == "":
                 break
-            pkg = PackageTransaction(*(line.split()))
+            
+            parts = line.split()
+            if len(parts) != self.transaction_field_count:
+                raise ValueError(
+                    f"unexpected number of fields in apt transaction line "
+                    f"expected {self.transaction_field_count}, got {len(parts)}: {line!r}"
+                )
+
+            pkg = PackageTransaction(*parts)
+
             if pkg.raw_action.endswith(".deb"): # ignore duplicate
                 continue
             
@@ -137,15 +150,14 @@ class AptActions:
             self.transaction_data = json.load(json_file)["packages"]
     
     def read_actions(self):
-        valid_actions = []
-
-        for item in self.actions_dir.iterdir():
-            if item.is_file() and item.suffix == ".action":
-                valid_actions.append(item)
+        valid_actions = sorted(
+            item for item in self.actions_dir.iterdir()
+            if item.is_file() and item.sufix == ".action"
+        )
         
         for action_file in valid_actions:
             with open(action_file, "r") as action_data:
-                for line_num, line in enumerate(action_data):
+                for line_num, line in enumerate(action_data, start=1):
                     line = line.rstrip()
 
                     if not line or line.startswith("#"):
