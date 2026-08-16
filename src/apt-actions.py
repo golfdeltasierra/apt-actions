@@ -169,7 +169,7 @@ class AptActions:
 
         valid_actions = sorted(
             item for item in self.actions_dir.iterdir()
-            if item.is_file() and item.sufix == ".action"
+            if item.is_file() and item.suffix == ".action"
         )
         
         for action_file in valid_actions:
