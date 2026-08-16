@@ -8,7 +8,7 @@ import argparse
 import sys
 import subprocess
 from pathlib import Path
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict, field, fields
 from typing import List
 
 def parse_args():
@@ -22,41 +22,6 @@ def parse_args():
     return parser.parse_args()
 
 @dataclass()
-class Action:
-    target: str
-    phase: str
-    transaction_type: str
-    command: str
-
-    def matching_packages(self, transaction_data, phase):
-        if not fnmatch(self.phase, phase):
-            return
-        
-        for pkg in transaction_data:
-            if not fnmatch(pkg["operation"], self.transaction_type.upper()):
-                continue
-            if fnmatch(pkg["name"], self.target):
-                yield pkg
-
-    def run(self, pkg):
-        env = os.environ.copy()
-        env["APT_ACTIONS_PACKAGE"] = pkg["name"]
-        env["APT_ACTIONS_OPERATION"] = pkg["operation"]
-        env["APT_ACTIONS_OLD_VERSION"] = pkg["old_version"]
-        env["APT_ACTIONS_NEW_VERSION"] = pkg["new_version"]
-        env["APT_ACTIONS_OLD_ARCH"] = pkg["old_arch"]
-        env["APT_ACTIONS_NEW_ARCH"] = pkg["new_arch"]
-
-
-        result = subprocess.run(self.command, shell=True, env=env, executable="/bin/bash")
-        if result.returncode != 0:
-            print(
-                f"apt-actions: command for '{pkg['name']}' exited with code "
-                f"{result.returncode}: {self.command}",
-                file=sys.stderr
-            )
-
-@dataclass()
 class PackageTransaction:
     name: str
     old_version: str
@@ -68,6 +33,47 @@ class PackageTransaction:
     new_multiarch: str
     raw_action: str
     operation: str = ""
+
+PackageTransaction.FIELD_ORDER = tuple(f.name for f in fields(PackageTransaction))
+
+@dataclass()
+class Action:
+    target: str
+    phase: str
+    transaction_type: str
+    command: str
+
+    def matching_packages(self, transaction_data, phase):
+        if not fnmatch(self.phase, phase):
+            return []
+        
+        return [
+            pkg for pkg in transaction_data
+            if fnmatch(pkg["operation"], self.transaction_type.upper())
+            and fnmatch(pkg["name"], self.target)
+        ]
+
+    @staticmethod
+    def _serialize_package(pkg: dict) -> str:
+        return "\t".join(str(pkg[name]) for name in PackageTransaction.FIELD_ORDER)
+
+    def run(self, packages):
+        env = os.environ.copy()
+        env["APT_ACTIONS_COUNT"] = str(len(packages))
+
+        payload = "\n".join(self._serialize_package(p) for p in packages) + "\n"
+
+
+        result = subprocess.run(self.command, 
+        shell=True, 
+        env=env, 
+        executable="/bin/bash",
+        input=payload)
+        if result.returncode != 0:
+            print(
+                f"apt-actions: command exited with code {result.returncode}: {self.command}",
+                file=sys.stderr
+            )
 
 @dataclass()
 class Transaction:
@@ -192,8 +198,9 @@ class AptActions:
         self.read_actions()
 
         for action in self.actions:
-            for pkg in action.matching_packages(self.transaction_data, current_phase):
-                action.run(pkg)
+            matches = action.matching_packages(self.transaction_data, current_phase)
+            if matches: # run command only once if there's a match, not one time per match
+                action.run(matches)
 
         if current_phase == "post":
             self.tmp_file.unlink(missing_ok=True)
