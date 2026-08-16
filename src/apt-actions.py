@@ -146,10 +146,22 @@ class AptActions:
             json.dump(asdict(transaction_data), json_file, indent=2)
 
     def read_parsed_data(self):
-        with open(self.tmp_file, "r") as json_file:
-            self.transaction_data = json.load(json_file)["packages"]
-    
+        if not self.tmp_file.exists():
+            raise SystemExit(
+                f"apt-actions: {self.tmp_file} does not exist - "
+                f"--parse should be run before --pre or --post"
+            )
+        try:
+            with open(self.tmp_file, "r") as json_file:
+                self.transaction_data = json.load(json_file)["packages"]
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"apt-actions: {self.tmp_file} corrupted: {e}")
+
+
     def read_actions(self):
+        if not self.actions_dir.is_dir():
+            return
+
         valid_actions = sorted(
             item for item in self.actions_dir.iterdir()
             if item.is_file() and item.sufix == ".action"
