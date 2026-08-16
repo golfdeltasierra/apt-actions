@@ -48,7 +48,7 @@ class Action:
         env["APT_ACTIONS_NEW_ARCH"] = pkg["new_arch"]
 
 
-        result = subprocess.run(self.command, shell=True, env=env)
+        result = subprocess.run(self.command, shell=True, env=env, executable="/bin/bash")
         if result.returncode != 0:
             print(
                 f"apt-actions: command for '{pkg['name']}' exited with code "
