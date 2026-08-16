@@ -68,7 +68,8 @@ class Action:
         shell=True, 
         env=env, 
         executable="/bin/bash",
-        input=payload)
+        input=payload,
+        text=True)
         if result.returncode != 0:
             print(
                 f"apt-actions: command exited with code {result.returncode}: {self.command}",
