@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from multiprocessing.sharedctypes import Value
 from fnmatch import fnmatch
 import json
 import os
