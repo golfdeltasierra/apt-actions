@@ -12,7 +12,7 @@ from pathlib import Path
 from dataclasses import dataclass, asdict, field, fields
 from typing import List
 
-logger = logging.getlogger(__name__)
+logger = logging.getLogger(__name__)
 
 def configure_logging(verbose, log_file = None):
     log_file = log_file or Path(os.getenv("APT_ACTIONS_LOG_FILE", "/var/log/apt-actions.log"))
