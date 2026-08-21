@@ -45,6 +45,8 @@ def parse_args():
     group.add_argument("--pre", help="Process pre-transaction actions", action="store_true")
     group.add_argument("--post", help="Process post-transaction actions", action="store_true")
     parser.add_argument("--verbose", help="Enable verbose logging", action="store_true")
+    parser.add_argument("--ignore-action-errors", help="Do not fail the hook even if an action's command fails",
+    action="store_true")
 
     return parser.parse_args()
 
@@ -233,32 +235,46 @@ class AptActions:
         
         logger.info(f"loaded {str(len(self.actions))} actions")
 
-    def run_actions(self, current_phase: str):
+    def run_actions(self, current_phase: str, ignore_errors: bool = False):
         logger.info(f"running phase {current_phase}")
         self.read_parsed_data()
         self.read_actions()
 
+        any_failed = False
+
         for action in self.actions:
             matches = action.matching_packages(self.transaction_data, current_phase)
-            if matches: # run command only once if there's a match, not one time per match
-                logger.debug(f"action {action.target} matched with {str(len(matches))} packages")
-                action.run(matches)
-            else:
+            if not matches: 
                 logger.debug(f"action {action.target} has no matches on phase {current_phase}")
+                continue
+
+            logger.debug(f"action {action.target} matched with {str(len(matches))} packages")
+            # run command only once if there's a match, not one time per match
+            if not action.run(matches): # returns False if returncode != 0
+                any_failed = True
+                    
 
         if current_phase == "post":
             self.tmp_file.unlink(missing_ok=True)
             logger.debug(f"removed {self.tmp_file}")
 
+        if any_failed and not ignore_errors:
+            logger.error(f"one or more actions failed during {current_phase} phase")
+            raise SystemExit(1)
+        elif any_failed:
+            logger.warning(f"one or more actions failed during {current_phase} phase, ignoring errors")
+
     def main(self, args):
+        ignore_errors = args.ignore_action_errors
+
         if args.parse:
             self.parse()
         
         elif args.pre:
-            self.run_actions("pre")
+            self.run_actions("pre", ignore_errors)
 
         elif args.post:
-            self.run_actions("post")
+            self.run_actions("post", ignore_errors)
 
 
 if __name__ == "__main__":
