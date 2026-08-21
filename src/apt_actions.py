@@ -73,7 +73,7 @@ class Action:
     command: str
 
     def matching_packages(self, transaction_data, phase):
-        if not fnmatch(self.phase, phase):
+        if not fnmatch(phase, self.phase):
             return []
         
         return [
