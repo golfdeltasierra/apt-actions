@@ -180,7 +180,7 @@ class AptActions:
         
         # preserve original order
         transaction_data.packages = list(reversed(transaction_data.packages))
-        logger.info(f"parsed transaction with {str(len(transaction_data.packages))}")
+        logger.info(f"parsed transaction with {str(len(transaction_data.packages))} package(s)")
 
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         with open(self.tmp_file, "w") as json_file:
