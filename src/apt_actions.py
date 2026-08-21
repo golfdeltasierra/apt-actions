@@ -21,7 +21,7 @@ def configure_logging(verbose, log_file = None):
     root.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter(
-        "apt-actions: %(levelname)s: %(message)s"
+        "%(asctime)s apt-actions: %(levelname)s: %(message)s"
     )
 
     console = logging.StreamHandler(sys.stderr)
