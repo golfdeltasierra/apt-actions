@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import logging
 from fnmatch import fnmatch
 import json
 import os
@@ -11,6 +12,31 @@ from pathlib import Path
 from dataclasses import dataclass, asdict, field, fields
 from typing import List
 
+logger = logging.getlogger(__name__)
+
+def configure_logging(verbose, log_file = None):
+    log_file = log_file or Path(os.getenv("APT_ACTIONS_LOG_FILE", "/var/log/apt-actions.log"))
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    fmt = logging.Formatter(
+        "apt-actions: %(levelname)s: %(message)s"
+    )
+
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(logging.DEBUG if verbose else logging.WARNING)
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    try:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(fmt)
+        root.addHandler(file_handler)
+    except OSError:
+        logger.warning(f"could not open {log_file}, log file disabled.")
+
 def parse_args():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
@@ -18,6 +44,7 @@ def parse_args():
     group.add_argument("--parse", help="Parse package data from stdin", action="store_true")
     group.add_argument("--pre", help="Process pre-transaction actions", action="store_true")
     group.add_argument("--post", help="Process post-transaction actions", action="store_true")
+    parser.add_argument("--verbose", help="Enable verbose logging", action="store_true")
 
     return parser.parse_args()
 
@@ -63,6 +90,7 @@ class Action:
 
         payload = "\n".join(self._serialize_package(p) for p in packages) + "\n"
 
+        logger.info(f"running command for {str(len(packages))} packages: {self.command}")
 
         result = subprocess.run(self.command, 
         shell=True, 
@@ -70,11 +98,14 @@ class Action:
         executable="/bin/bash",
         input=payload,
         text=True)
+
+
         if result.returncode != 0:
-            print(
-                f"apt-actions: command exited with code {result.returncode}: {self.command}",
-                file=sys.stderr
-            )
+            logger.error(f"command exited with code {str(result.returncode)}: {self.command}")
+            return False
+        else:
+            logger.info(f"command {self.command} exited with code 0")
+            return True
 
 @dataclass()
 class Transaction:
@@ -120,8 +151,9 @@ class AptActions:
         )
 
     def parse(self):
-        bulk_data = reversed(sys.stdin.readlines())
+        logger.debug("parsing transaction data via stdin")
 
+        bulk_data = reversed(sys.stdin.readlines())
         transaction_data = Transaction()
 
         for line in bulk_data:
@@ -146,34 +178,40 @@ class AptActions:
         
         # preserve original order
         transaction_data.packages = list(reversed(transaction_data.packages))
+        logger.info(f"parsed transaction with {str(len(transaction_data.packages))}")
 
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         with open(self.tmp_file, "w") as json_file:
             json.dump(asdict(transaction_data), json_file, indent=2)
+        logger.debug(f"transaction saved at {self.tmp_file}")
 
     def read_parsed_data(self):
         if not self.tmp_file.exists():
-            raise SystemExit(
-                f"apt-actions: {self.tmp_file} does not exist - "
-                f"--parse should be run before --pre or --post"
-            )
+            logger.error(f"{self.tmp_file} not found. Run --parse before --pre/--post.")
+            raise SystemExit(1)
         try:
             with open(self.tmp_file, "r") as json_file:
                 self.transaction_data = json.load(json_file)["packages"]
         except json.JSONDecodeError as e:
-            raise SystemExit(f"apt-actions: {self.tmp_file} corrupted: {e}")
+            logger.error(f"apt-actions: {self.tmp_file} corrupted: {e}")
+            raise SystemExit(1)
 
+        logger.debug(f"loaded {str(len(self.transaction_data))} from {self.tmp_file}")
 
     def read_actions(self):
         if not self.actions_dir.is_dir():
+            logger.debug(f"{self.actions_dir} does not exist, no action to run.")
             return
 
         valid_actions = sorted(
             item for item in self.actions_dir.iterdir()
             if item.is_file() and item.suffix == ".action"
         )
+
+        logger.debug(f"found {str(len(valid_actions))} at {self.actions_dir}")
         
         for action_file in valid_actions:
+            logger.debug(f"reading {action_file}")
             with open(action_file, "r") as action_data:
                 for line_num, line in enumerate(action_data, start=1):
                     line = line.rstrip()
@@ -192,19 +230,25 @@ class AptActions:
                     action = Action(*parts)
                     action.transaction_type = action.transaction_type.upper()
                     self.actions.append(action)
-
+        
+        logger.info(f"loaded {str(len(self.actions))} actions")
 
     def run_actions(self, current_phase: str):
+        logger.info(f"running phase {current_phase}")
         self.read_parsed_data()
         self.read_actions()
 
         for action in self.actions:
             matches = action.matching_packages(self.transaction_data, current_phase)
             if matches: # run command only once if there's a match, not one time per match
+                logger.debug(f"action {action.target} matched with {str(len(matches))} packages")
                 action.run(matches)
+            else:
+                logger.debug(f"action {action.target} has no matches on phase {current_phase}")
 
         if current_phase == "post":
             self.tmp_file.unlink(missing_ok=True)
+            logger.debug(f"removed {self.tmp_file}")
 
     def main(self, args):
         if args.parse:
@@ -218,4 +262,6 @@ class AptActions:
 
 
 if __name__ == "__main__":
-    AptActions().main(parse_args())
+    args = parse_args()
+    configure_logging(args.verbose)
+    AptActions().main(args)
